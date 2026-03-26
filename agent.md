@@ -1,6 +1,4 @@
-# agent.md — TextureForge SaaS: Complete Implementable Specification
 
----
 
 ## 1. Product Overview
 
