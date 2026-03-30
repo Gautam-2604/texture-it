@@ -9,6 +9,8 @@ export function enhancePrompt(userPrompt: string): string {
   return `${userPrompt}, ${TEXTURE_SUFFIX}`
 }
 
+
+
 export async function generateTexture(enhancedPrompt: string): Promise<ArrayBuffer> {
   const apiKey = process.env.HF_API_KEY
   if (!apiKey) throw new Error('HF_API_KEY not configured')
