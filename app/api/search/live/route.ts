@@ -110,6 +110,47 @@ function parseAssetUrl(url: string): ParsedAsset {
   }
 }
 
+// Fetch only the <head> of a page and extract og:image.
+// Streams until </head> or 12 KB, then aborts — fast and cheap.
+async function fetchOgImage(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 3000)
+
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Textura/1.0)', Accept: 'text/html' },
+      next: { revalidate: 86400 }, // cache OG image per URL for 24h
+    })
+    clearTimeout(timer)
+    if (!res.ok) return null
+
+    const reader = res.body?.getReader()
+    if (!reader) return null
+
+    const decoder = new TextDecoder()
+    let html = ''
+    try {
+      while (html.length < 12000) {
+        const { done, value } = await reader.read()
+        if (done) break
+        html += decoder.decode(value, { stream: true })
+        if (html.includes('</head>') || html.includes('<body')) break
+      }
+    } finally {
+      reader.cancel().catch(() => {})
+    }
+
+    // og:image appears in either attribute order
+    const m =
+      html.match(/property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ??
+      html.match(/content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+    return m?.[1]?.trim() ?? null
+  } catch {
+    return null
+  }
+}
+
 function cleanTitle(title: string): string {
   return title
     .replace(/\s*[-–|]\s*(Poly Haven|AmbientCG|3DTextures|FreePBR|CGBookcase|ShareTextures|Free PBR|Texture Can).*/i, '')
@@ -144,27 +185,28 @@ export async function GET(req: NextRequest) {
   const organic: Array<{ link: string; title: string; snippet: string; imageUrl?: string }> =
     data.organic ?? []
 
-  const results: LiveResult[] = organic
-    .filter((r) => {
-      const domain = getDomain(r.link)
-      return TEXTURE_SITES.some((s) => domain.endsWith(s))
-    })
-    .map((r) => {
-      const { downloadUrl, thumbUrl, isSpecificPage } = parseAssetUrl(r.link)
-      return { isSpecificPage, downloadUrl, thumbUrl, r }
-    })
+  const filtered = organic
+    .filter((r) => TEXTURE_SITES.some((s) => getDomain(r.link).endsWith(s)))
+    .map((r) => ({ ...parseAssetUrl(r.link), r }))
     .filter(({ isSpecificPage }) => isSpecificPage)
-    .map(({ downloadUrl, thumbUrl, r }) => ({
-      id: r.link,
-      name: cleanTitle(r.title),
-      description: r.snippet ?? '',
-      // prefer derived thumb (always correct for PH/ACG), fall back to Serper's imageUrl
-      thumb: thumbUrl ?? r.imageUrl ?? null,
-      downloadUrl,
-      pageUrl: r.link,
-      source: getDomain(r.link),
-      canDownload: !!downloadUrl,
-    }))
+
+  // Resolve thumbnails: known CDN pattern → Serper imageUrl → OG scrape (parallel, 3s timeout)
+  const results: LiveResult[] = await Promise.all(
+    filtered.map(async ({ downloadUrl, thumbUrl, r }) => {
+      const knownThumb = thumbUrl ?? r.imageUrl ?? null
+      const resolvedThumb = knownThumb ?? await fetchOgImage(r.link)
+      return {
+        id: r.link,
+        name: cleanTitle(r.title),
+        description: r.snippet ?? '',
+        thumb: resolvedThumb,
+        downloadUrl,
+        pageUrl: r.link,
+        source: getDomain(r.link),
+        canDownload: !!downloadUrl,
+      }
+    })
+  )
 
   return NextResponse.json({ results })
 }
