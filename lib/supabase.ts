@@ -40,6 +40,31 @@ export async function uploadTextureToStorage(
   return data.publicUrl
 }
 
+// Extract the storage path from a Supabase public URL
+function storagePathFromUrl(publicUrl: string): string | null {
+  try {
+    const u = new URL(publicUrl)
+    // Path is like /storage/v1/object/public/textures/userId/timestamp.png
+    const marker = `/public/${STORAGE_BUCKET}/`
+    const idx = u.pathname.indexOf(marker)
+    if (idx === -1) return null
+    return u.pathname.slice(idx + marker.length)
+  } catch {
+    return null
+  }
+}
+
+// Download a texture using service-role credentials (avoids relying on public URL behaviour)
+export async function downloadTextureFromStorage(blobUrl: string): Promise<{ data: Blob; contentType: string } | null> {
+  const path = storagePathFromUrl(blobUrl)
+  if (!path) return null
+
+  const { data, error } = await db().storage.from(STORAGE_BUCKET).download(path)
+  if (error || !data) return null
+
+  return { data, contentType: data.type || 'image/png' }
+}
+
 export type UserRecord = {
   id: string
   email: string

@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { downloadSchema } from '@/lib/schemas'
 import { getDownloadRatelimit } from '@/lib/ratelimit'
-import { getTextureById } from '@/lib/supabase'
+import { getTextureById, downloadTextureFromStorage } from '@/lib/supabase'
 
 export async function GET(req: Request) {
   try {
@@ -32,18 +32,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Texture not found' }, { status: 404 })
     }
 
-    // Stream from Vercel Blob
-    const blobRes = await fetch(texture.blob_url)
-    if (!blobRes.ok) {
-      return NextResponse.json({ error: 'Failed to fetch texture' }, { status: 502 })
+    // Download via Supabase service-role client (bypasses public URL quirks)
+    const file = await downloadTextureFromStorage(texture.blob_url)
+    if (!file) {
+      return NextResponse.json({ error: 'Texture file not found in storage' }, { status: 404 })
     }
 
-    const contentType = blobRes.headers.get('content-type') ?? 'image/webp'
-    const filename = `textura-${parsed.data.id.slice(0, 8)}.webp`
+    const ext = file.contentType.includes('png') ? 'png' : 'jpg'
+    const filename = `textura-${parsed.data.id.slice(0, 8)}.${ext}`
+    const buffer = await file.data.arrayBuffer()
 
-    return new Response(blobRes.body, {
+    return new Response(buffer, {
       headers: {
-        'Content-Type': contentType,
+        'Content-Type': file.contentType,
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Cache-Control': 'private, no-store',
         'X-Content-Type-Options': 'nosniff',

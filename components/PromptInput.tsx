@@ -66,7 +66,7 @@ export function PromptInput({ value, onChange, disabled, placeholder }: PromptIn
         {/* Bottom info bar */}
         <div className="flex items-center justify-between px-5 pb-4 pt-1">
           <span className="text-xs text-zinc-600 font-mono">
-            seamless • tileable • 1024×1024
+            seamless • tileable • 1920×1080
           </span>
           <span
             className={cn(

@@ -24,7 +24,7 @@ export async function generateTexture(enhancedPrompt: string): Promise<ArrayBuff
     },
     body: JSON.stringify({
       inputs: enhancedPrompt,
-      parameters: { width: 1024, height: 1024 },
+      parameters: { width: 1920, height: 1080 },
     }),
   })
 

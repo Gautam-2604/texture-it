@@ -15,21 +15,32 @@ interface TextureCardProps {
 export function TextureCard({ id, prompt, url, createdAt, isNew }: TextureCardProps) {
   const [downloading, setDownloading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [downloadError, setDownloadError] = useState(false)
 
   const handleDownload = async () => {
     setDownloading(true)
+    setDownloadError(false)
     try {
       const res = await fetch(`/api/download?id=${id}`)
       if (!res.ok) throw new Error('Download failed')
+
+      // Guard: make sure we got an image, not an error JSON
+      const contentType = res.headers.get('content-type') ?? ''
+      if (!contentType.startsWith('image/')) throw new Error('Invalid response')
+
       const blob = await res.blob()
       const objUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = objUrl
-      a.download = `textura-${id.slice(0, 8)}.webp`
+      a.download = `textura-${id.slice(0, 8)}.png`
+      document.body.appendChild(a)
       a.click()
-      URL.revokeObjectURL(objUrl)
-    } catch (err) {
-      console.error(err)
+      document.body.removeChild(a)
+      // Delay revoke so the browser has time to start the download
+      setTimeout(() => URL.revokeObjectURL(objUrl), 5000)
+    } catch {
+      setDownloadError(true)
+      setTimeout(() => setDownloadError(false), 3000)
     } finally {
       setDownloading(false)
     }
@@ -59,7 +70,7 @@ export function TextureCard({ id, prompt, url, createdAt, isNew }: TextureCardPr
         )}
 
         <CardItem translateZ="50" className="w-full">
-          <div className="relative w-full aspect-square overflow-hidden">
+          <div className="relative w-full aspect-video overflow-hidden">
             <Image
               src={url}
               alt={prompt}
@@ -99,19 +110,28 @@ export function TextureCard({ id, prompt, url, createdAt, isNew }: TextureCardPr
               <button
                 onClick={handleDownload}
                 disabled={downloading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-600/80 to-blue-600/80 hover:from-purple-600 hover:to-blue-600 text-white text-xs font-semibold transition-all disabled:opacity-50"
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition-all disabled:opacity-50',
+                  downloadError
+                    ? 'bg-red-600/80 hover:bg-red-600'
+                    : 'bg-gradient-to-r from-purple-600/80 to-blue-600/80 hover:from-purple-600 hover:to-blue-600'
+                )}
               >
                 {downloading ? (
                   <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
+                ) : downloadError ? (
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                 ) : (
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
                 )}
-                Download
+                {downloadError ? 'Failed' : 'Download'}
               </button>
             </div>
           </div>
