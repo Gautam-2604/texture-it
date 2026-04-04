@@ -30,78 +30,83 @@ function getDomain(url: string): string {
   }
 }
 
-// Per-site strict validation. Returns downloadUrl if we can proxy it,
-// isSpecificPage=false if the URL is a homepage/category/search page.
-function parseAssetUrl(url: string): { downloadUrl: string | null; isSpecificPage: boolean } {
+interface ParsedAsset {
+  downloadUrl: string | null
+  thumbUrl: string | null
+  isSpecificPage: boolean
+}
+
+// Per-site strict validation. Returns downloadUrl + thumbUrl where known,
+// isSpecificPage=false for homepages/category/search pages.
+function parseAssetUrl(url: string): ParsedAsset {
+  const none: ParsedAsset = { downloadUrl: null, thumbUrl: null, isSpecificPage: false }
   try {
     const u = new URL(url)
-    const path = u.pathname.replace(/\/$/, '')        // strip trailing slash
-    const segments = path.split('/').filter(Boolean)   // ['a', 'aerial_asphalt_01']
+    const path = u.pathname.replace(/\/$/, '')
+    const segments = path.split('/').filter(Boolean)
 
     // ── Poly Haven ──────────────────────────────────────────────────────────────
-    // Specific asset page: polyhaven.com/a/{slug}
     if (u.hostname.includes('polyhaven.com')) {
       const m = path.match(/^\/a\/([a-z0-9_]+)$/)
-      if (m) return { downloadUrl: `/api/download/asset?source=polyhaven&id=${m[1]}`, isSpecificPage: true }
-      return { downloadUrl: null, isSpecificPage: false }
+      if (m) return {
+        downloadUrl: `/api/download/asset?source=polyhaven&id=${m[1]}`,
+        thumbUrl: `https://cdn.polyhaven.com/asset_img/thumbs/${m[1]}.png?height=400`,
+        isSpecificPage: true,
+      }
+      return none
     }
 
     // ── AmbientCG ───────────────────────────────────────────────────────────────
-    // Specific: ambientcg.com/view?id={AssetId}
     if (u.hostname.includes('ambientcg.com')) {
       const id = u.searchParams.get('id')
-      if (path === '/view' && id) {
-        return { downloadUrl: `/api/download/asset?source=ambientcg&id=${id}`, isSpecificPage: true }
+      if (path === '/view' && id) return {
+        downloadUrl: `/api/download/asset?source=ambientcg&id=${id}`,
+        thumbUrl: `https://acg-media.struffelproductions.com/file/ambientCG-Web/media/thumbnail/512-PNG/${id}.png`,
+        isSpecificPage: true,
       }
-      return { downloadUrl: null, isSpecificPage: false }
+      return none
     }
 
     // ── 3DTextures ──────────────────────────────────────────────────────────────
-    // Specific: /YYYY/MM/DD/name/ OR /name/ — reject /category/, /tag/, /page/
     if (u.hostname.includes('3dtextures.me')) {
       const GENERIC = ['category', 'tag', 'page', 'author', 'search']
       const isSpecific = segments.length >= 1 && !segments.some(s => GENERIC.includes(s))
-      return { downloadUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
     }
 
     // ── FreePBR ─────────────────────────────────────────────────────────────────
-    // Specific: /materials/{name} or /{name} — reject root and /category/
     if (u.hostname.includes('freepbr.com')) {
       const GENERIC = ['category', 'page', 'tag', 'search']
       const isSpecific = segments.length >= 1 && !segments.some(s => GENERIC.includes(s))
-      return { downloadUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
     }
 
     // ── CGBookcase ──────────────────────────────────────────────────────────────
-    // Specific: /textures/{name} (exactly 2 segments, first is 'textures')
     if (u.hostname.includes('cgbookcase.com')) {
       const isSpecific = segments.length >= 2 && segments[0] === 'textures'
-      return { downloadUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
     }
 
     // ── ShareTextures ───────────────────────────────────────────────────────────
-    // Specific: /textures/{category}/{name} (3+ segments)
     if (u.hostname.includes('sharetextures.com')) {
       const isSpecific = segments.length >= 3 && segments[0] === 'textures'
-      return { downloadUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
     }
 
     // ── PublicDomainTextures ────────────────────────────────────────────────────
     if (u.hostname.includes('publicdomaintextures.net')) {
-      const isSpecific = segments.length >= 2
-      return { downloadUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 2 }
     }
 
     // ── TextureCan ──────────────────────────────────────────────────────────────
     if (u.hostname.includes('texturecan.com')) {
       const isSpecific = segments.includes('details') && segments.length >= 2
-      return { downloadUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
     }
 
-    // Unknown site in our list — accept if path is deep enough
-    return { downloadUrl: null, isSpecificPage: segments.length >= 2 }
+    return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 2 }
   } catch {
-    return { downloadUrl: null, isSpecificPage: false }
+    return none
   }
 }
 
@@ -145,15 +150,16 @@ export async function GET(req: NextRequest) {
       return TEXTURE_SITES.some((s) => domain.endsWith(s))
     })
     .map((r) => {
-      const { downloadUrl, isSpecificPage } = parseAssetUrl(r.link)
-      return { isSpecificPage, downloadUrl, r }
+      const { downloadUrl, thumbUrl, isSpecificPage } = parseAssetUrl(r.link)
+      return { isSpecificPage, downloadUrl, thumbUrl, r }
     })
-    .filter(({ isSpecificPage }) => isSpecificPage)   // drop homepages & category pages
-    .map(({ downloadUrl, r }) => ({
+    .filter(({ isSpecificPage }) => isSpecificPage)
+    .map(({ downloadUrl, thumbUrl, r }) => ({
       id: r.link,
       name: cleanTitle(r.title),
       description: r.snippet ?? '',
-      thumb: r.imageUrl ?? null,
+      // prefer derived thumb (always correct for PH/ACG), fall back to Serper's imageUrl
+      thumb: thumbUrl ?? r.imageUrl ?? null,
       downloadUrl,
       pageUrl: r.link,
       source: getDomain(r.link),

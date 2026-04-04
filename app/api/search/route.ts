@@ -76,7 +76,7 @@ async function searchAmbientCG(q: string): Promise<TextureAsset[]> {
     id: `acg_${a.assetId}`,
     name: a.displayData?.name ?? a.assetId,
     categories: a.displayData?.tags ?? [],
-    thumb: `https://acg-media.struffelproductions.com/file/ambientcg-web/media/sphere/${a.assetId}_PREVIEW.jpg`,
+    thumb: `https://acg-media.struffelproductions.com/file/ambientCG-Web/media/thumbnail/512-PNG/${a.assetId}.png`,
     downloadUrl: `/api/download/asset?source=ambientcg&id=${a.assetId}`,
     pageUrl: `https://ambientcg.com/view?id=${a.assetId}`,
     source: 'ambientcg' as const,
