@@ -86,13 +86,13 @@ function buildSearchQuery(q: string): { serperQuery: string; sites: string[]; mo
 
   if (mode === '2d') {
     sites = TWO_D_SITES
-    suffix = 'free 2D game asset'
+    suffix = 'free 2D game asset sprite'
   } else if (mode === '3d') {
-    sites = THREE_D_SITES
-    suffix = 'free texture'
+    sites = ALL_SITES
+    suffix = 'free texture OR sprite OR 2D asset'
   } else {
     sites = ALL_SITES
-    suffix = 'free texture asset'
+    suffix = 'free texture OR 2D asset OR sprite'
   }
 
   const siteFilter = sites.map((s) => `site:${s}`).join(' OR ')
