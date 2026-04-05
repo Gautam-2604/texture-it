@@ -1,5 +1,4 @@
 'use client'
-import React from 'react'
 import Link from 'next/link'
 import { useAuth } from '@clerk/nextjs'
 
@@ -10,6 +9,7 @@ const FEATURES_FREE = [
   'PNG download',
   'Full texture history',
 ]
+
 
 export default function PricingPage() {
   const { isSignedIn } = useAuth()
