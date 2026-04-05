@@ -12,6 +12,12 @@ export interface LiveResult {
   canDownload: boolean
 }
 
+export interface SuggestedSite {
+  name: string
+  url: string
+  description: string
+}
+
 const THREE_D_SITES = [
   'polyhaven.com',
   'ambientcg.com',
@@ -57,7 +63,6 @@ function detectMode(q: string): AssetMode {
   return 'both'
 }
 
-// Strip common natural-language filler so search engines see only the meaningful terms
 const FILLER_PATTERNS = [
   /\b(i need|i want|i'm looking for|looking for|find me|give me|show me|please find|can you find|please give)\b/gi,
   /\b(something (that looks like|like|similar to))\b/gi,
@@ -77,32 +82,201 @@ function cleanQuery(q: string): string {
   return result.replace(/\s+/g, ' ').trim()
 }
 
-function buildSearchQuery(q: string): { serperQuery: string; sites: string[]; mode: AssetMode } {
+// ── Keyword Extractor ──────────────────────────────────────────────────────
+// Strips stop words so Serper always gets concise, meaningful terms
+// even without AI. "A lightweight woven fabric with natural airflow"
+// → "lightweight woven fabric airflow"
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of',
+  'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should',
+  'may', 'might', 'shall', 'can', 'that', 'this', 'these', 'those', 'it', 'its',
+  'which', 'who', 'what', 'when', 'where', 'how', 'all', 'some', 'any', 'no',
+  'not', 'my', 'your', 'his', 'her', 'our', 'their', 'i', 'you', 'he', 'she',
+  'we', 'they', 'me', 'him', 'us', 'them',
+])
+
+function extractKeywords(q: string): string {
   const cleaned = cleanQuery(q)
-  const mode = detectMode(q)
+  const words = cleaned.toLowerCase().split(/\s+/)
+  const keywords = words.filter((w) => w.length > 2 && !STOP_WORDS.has(w))
+  // Max 3 words — more than that makes Serper queries too narrow to find anything
+  return keywords.slice(0, 3).join(' ')
+}
 
-  let sites: string[]
+function buildSerperQuery(terms: string, mode: AssetMode, sites: string[]): string {
   let suffix: string
-
   if (mode === '2d') {
-    sites = TWO_D_SITES
     suffix = 'free 2D game asset sprite'
   } else if (mode === '3d') {
-    sites = ALL_SITES
-    suffix = 'free texture OR sprite OR 2D asset'
+    suffix = 'free texture OR material PBR'
   } else {
-    sites = ALL_SITES
-    suffix = 'free texture OR 2D asset OR sprite'
+    suffix = 'free texture OR material OR sprite'
+  }
+  const siteFilter = sites.map((s) => `site:${s}`).join(' OR ')
+  return `${terms} ${suffix} (${siteFilter})`
+}
+
+function buildSearchQuery(q: string): { sites: string[]; mode: AssetMode; keywords: string } {
+  const mode = detectMode(q)
+  // For 'both' mode we run separate 3D + 2D queries, so sites here is just used for
+  // domain filtering after results come in — always pass ALL_SITES for that.
+  const sites = ALL_SITES
+  const keywords = extractKeywords(q)
+  return { sites, mode, keywords }
+}
+
+// ── AI Query Expansion ──────────────────────────────────────────────────────
+// Tries models in order, skipping any that return 429 (rate-limited upstream)
+// 'openrouter/auto' lets OpenRouter pick any available model — bypasses
+// per-provider rate limits that hit named free models.
+const FREE_MODELS = [
+  'openrouter/auto',
+  'google/gemma-2-9b-it:free',
+  'qwen/qwen-2.5-7b-instruct:free',
+  'mistralai/mistral-7b-instruct:free',
+  'meta-llama/llama-3.2-3b-instruct:free',
+]
+
+async function expandQuery(
+  query: string,
+  mode: AssetMode,
+): Promise<{ terms: string[]; error?: string; modelUsed?: string }> {
+  const apiKey = process.env.OPENROUTER_API_KEY
+  if (!apiKey) return { terms: [], error: 'OPENROUTER_API_KEY not set' }
+
+  const modeHint =
+    mode === '2d'
+      ? '2D game assets, sprites, tilesets, and icons'
+      : mode === '3d'
+      ? 'PBR textures, seamless materials, and normal maps'
+      : 'game assets, PBR textures, sprites, or materials'
+
+  const prompt = `You are a search query optimizer for finding free ${modeHint} on sites like Poly Haven, AmbientCG, OpenGameArt, and Kenney.
+
+User query: "${query}"
+
+Generate exactly 2 short, distinct search queries (2-5 words each) that use specific technical terms asset creators actually use — not the user's vague description. Return ONLY a JSON array of 2 strings, nothing else.
+
+Example output: ["woven fabric PBR seamless", "linen cloth material tileable"]`
+
+  let lastError = ''
+
+  for (const model of FREE_MODELS) {
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 7000)
+
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://textura.app',
+          'X-Title': 'Textura',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 80,
+          temperature: 0.3,
+        }),
+        signal: controller.signal,
+      })
+      clearTimeout(timer)
+
+      if (res.status === 429) {
+        lastError = `${model} rate-limited, trying next`
+        continue
+      }
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText)
+        lastError = `${model} error ${res.status}: ${errText}`
+        continue
+      }
+
+      const data = await res.json()
+      const content: string = data.choices?.[0]?.message?.content?.trim() ?? ''
+      if (!content) { lastError = `${model} returned empty content`; continue }
+
+      const match = content.match(/\[[\s\S]*?\]/)
+      if (!match) { lastError = `${model} unparseable: ${content}`; continue }
+
+      const parsed: unknown = JSON.parse(match[0])
+      if (!Array.isArray(parsed)) { lastError = 'Not an array'; continue }
+
+      const terms = (parsed as unknown[])
+        .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+        .slice(0, 2)
+
+      if (terms.length === 0) { lastError = `${model} returned empty array`; continue }
+
+      return { terms, modelUsed: model }
+    } catch (e) {
+      lastError = `${model} threw: ${String(e)}`
+      continue
+    }
   }
 
-  const siteFilter = sites.map((s) => `site:${s}`).join(' OR ')
-  return {
-    serperQuery: `${cleaned} ${suffix} (${siteFilter})`,
-    sites,
-    mode,
+  return { terms: [], error: `All models failed. Last: ${lastError}` }
+}
+
+// ── Suggested Sites ──────────────────────────────────────────────────────────
+function buildSuggestedSites(keywords: string, mode: AssetMode): SuggestedSite[] {
+  const q = encodeURIComponent(keywords)
+  const sites: SuggestedSite[] = []
+
+  if (mode !== '2d') {
+    sites.push(
+      { name: 'Poly Haven', url: `https://polyhaven.com/textures?s=${q}`, description: 'Free CC0 PBR textures & HDRIs' },
+      { name: 'AmbientCG', url: `https://ambientcg.com/list?search=${q}`, description: 'CC0 PBR materials' },
+      { name: '3DTextures.me', url: `https://3dtextures.me/?s=${q}`, description: 'Free seamless PBR textures' },
+      { name: 'FreePBR', url: `https://freepbr.com/?s=${q}`, description: 'Free PBR texture maps' },
+      { name: 'CGBookcase', url: `https://www.cgbookcase.com/textures?search=${q}`, description: 'Free tileable PBR textures' },
+      { name: 'ShareTextures', url: `https://www.sharetextures.com/textures?search=${q}`, description: 'Free CC0 textures' },
+    )
+  }
+
+  if (mode !== '3d') {
+    sites.push(
+      { name: 'OpenGameArt', url: `https://opengameart.org/art-search?keys=${q}`, description: 'Free 2D/3D game art' },
+      { name: 'Kenney', url: `https://kenney.nl/assets?q=${q}`, description: 'Free game asset packs' },
+      { name: 'itch.io Assets', url: `https://itch.io/game-assets/free?search=${q}`, description: 'Free indie game assets' },
+      { name: 'Game Icons', url: `https://game-icons.net/`, description: 'Free SVG game icons' },
+    )
+  }
+
+  if (mode === 'both') {
+    sites.push(
+      { name: 'PublicDomainTextures', url: `https://www.publicdomaintextures.net/?s=${q}`, description: 'Public domain photo textures' },
+    )
+  }
+
+  return sites
+}
+
+// ── Serper Fetching ──────────────────────────────────────────────────────────
+async function fetchSerperResults(
+  serperQuery: string,
+  apiKey: string,
+): Promise<Array<{ link: string; title: string; snippet: string; imageUrl?: string }>> {
+  try {
+    const res = await fetch('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: serperQuery, num: 20 }),
+      next: { revalidate: 300 },
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.organic ?? []
+  } catch {
+    return []
   }
 }
 
+// ── URL / Domain Helpers ─────────────────────────────────────────────────────
 function getDomain(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '')
@@ -128,7 +302,6 @@ function parseAssetUrl(url: string): ParsedAsset {
     const path = u.pathname.replace(/\/$/, '')
     const segments = path.split('/').filter(Boolean)
 
-    // ── Poly Haven ──────────────────────────────────────────────────────────────
     if (u.hostname.includes('polyhaven.com')) {
       const m = path.match(/^\/a\/([a-z0-9_]+)$/)
       if (m) return {
@@ -139,7 +312,6 @@ function parseAssetUrl(url: string): ParsedAsset {
       return none
     }
 
-    // ── AmbientCG ───────────────────────────────────────────────────────────────
     if (u.hostname.includes('ambientcg.com')) {
       const id = u.searchParams.get('id')
       if (path === '/view' && id) return {
@@ -150,71 +322,50 @@ function parseAssetUrl(url: string): ParsedAsset {
       return none
     }
 
-    // ── 3DTextures ──────────────────────────────────────────────────────────────
     if (u.hostname.includes('3dtextures.me')) {
       const GENERIC = ['category', 'tag', 'page', 'author', 'search']
-      const isSpecific = segments.length >= 1 && !segments.some((s) => GENERIC.includes(s))
-      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 1 && !segments.some((s) => GENERIC.includes(s)) }
     }
 
-    // ── FreePBR ─────────────────────────────────────────────────────────────────
     if (u.hostname.includes('freepbr.com')) {
       const GENERIC = ['category', 'page', 'tag', 'search']
-      const isSpecific = segments.length >= 1 && !segments.some((s) => GENERIC.includes(s))
-      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 1 && !segments.some((s) => GENERIC.includes(s)) }
     }
 
-    // ── CGBookcase ──────────────────────────────────────────────────────────────
     if (u.hostname.includes('cgbookcase.com')) {
-      const isSpecific = segments.length >= 2 && segments[0] === 'textures'
-      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 2 && segments[0] === 'textures' }
     }
 
-    // ── ShareTextures ───────────────────────────────────────────────────────────
     if (u.hostname.includes('sharetextures.com')) {
-      const isSpecific = segments.length >= 3 && segments[0] === 'textures'
-      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 3 && segments[0] === 'textures' }
     }
 
-    // ── PublicDomainTextures ────────────────────────────────────────────────────
     if (u.hostname.includes('publicdomaintextures.net')) {
       return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 2 }
     }
 
-    // ── TextureCan ──────────────────────────────────────────────────────────────
     if (u.hostname.includes('texturecan.com')) {
-      const isSpecific = segments.includes('details') && segments.length >= 2
-      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.includes('details') && segments.length >= 2 }
     }
 
-    // ── OpenGameArt ─────────────────────────────────────────────────────────────
     if (u.hostname.includes('opengameart.org')) {
-      const isSpecific = segments.length >= 2 && segments[0] === 'content'
-      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 2 && segments[0] === 'content' }
     }
 
-    // ── Kenney ───────────────────────────────────────────────────────────────────
     if (u.hostname.includes('kenney.nl')) {
-      const isSpecific = segments[0] === 'assets' && segments.length >= 2
-      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments[0] === 'assets' && segments.length >= 2 }
     }
 
-    // ── Game-Icons ───────────────────────────────────────────────────────────────
     if (u.hostname.includes('game-icons.net')) {
-      // e.g. https://game-icons.net/1x1/lorc/sword.html
       return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 3 }
     }
 
-    // ── CraftPix ──────────────────────────────────────────────────────────────────
     if (u.hostname.includes('craftpix.net')) {
-      const isSpecific = segments.length >= 2 && (segments[0] === 'product' || segments[0] === 'freebies')
-      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 2 && (segments[0] === 'product' || segments[0] === 'freebies') }
     }
 
-    // ── itch.io ────────────────────────────────────────────────────────────────────
     if (u.hostname.includes('itch.io')) {
-      if (u.hostname === 'itch.io') return none // browse/category pages
-      // author.itch.io/asset-slug
+      if (u.hostname === 'itch.io') return none
       return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 1 }
     }
 
@@ -272,33 +423,68 @@ function cleanTitle(title: string): string {
     .trim()
 }
 
+function deduplicateOrganic(
+  batches: Array<Array<{ link: string; title: string; snippet: string; imageUrl?: string }>>,
+): Array<{ link: string; title: string; snippet: string; imageUrl?: string }> {
+  const seen = new Set<string>()
+  const out: Array<{ link: string; title: string; snippet: string; imageUrl?: string }> = []
+  for (const batch of batches) {
+    for (const item of batch) {
+      if (!seen.has(item.link)) {
+        seen.add(item.link)
+        out.push(item)
+      }
+    }
+  }
+  return out
+}
+
+// ── Route Handler ────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const query = req.nextUrl.searchParams.get('q') ?? ''
-  if (!query.trim()) return NextResponse.json({ results: [] })
+  if (!query.trim()) return NextResponse.json({ results: [], suggestedSites: [] })
 
-  const apiKey = process.env.SERPER_API_KEY
-  if (!apiKey) {
+  const serperKey = process.env.SERPER_API_KEY
+  if (!serperKey) {
     return NextResponse.json({ error: 'SERPER_API_KEY not configured' }, { status: 503 })
   }
 
-  const { serperQuery, sites } = buildSearchQuery(query)
+  const { sites, mode, keywords } = buildSearchQuery(query)
 
-  const res = await fetch('https://google.serper.dev/search', {
-    method: 'POST',
-    headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ q: serperQuery, num: 20 }),
-    next: { revalidate: 300 },
-  })
+  // Build base Serper queries. For 'both' mode, split 3D and 2D sites into two
+  // separate queries — a single query with 13 site: operators is too complex for
+  // Google and consistently returns 0 results.
+  const baseQueries =
+    mode === 'both'
+      ? [
+          buildSerperQuery(keywords, mode, THREE_D_SITES),
+          buildSerperQuery(keywords, mode, TWO_D_SITES),
+        ]
+      : [buildSerperQuery(keywords, mode, mode === '2d' ? TWO_D_SITES : THREE_D_SITES)]
 
-  if (!res.ok) {
-    return NextResponse.json({ error: 'Live search failed' }, { status: 502 })
-  }
+  // Run base Serper queries and AI expansion in parallel
+  const [baseOrganicBatches, { terms: expandedTerms, error: openRouterError, modelUsed }] =
+    await Promise.all([
+      Promise.all(baseQueries.map((q) => fetchSerperResults(q, serperKey))),
+      expandQuery(query, mode),
+    ])
 
-  const data = await res.json()
-  const organic: Array<{ link: string; title: string; snippet: string; imageUrl?: string }> =
-    data.organic ?? []
+  // Run expanded queries (one Serper call per AI term, also split by mode)
+  const expandedOrganicBatches = await Promise.all(
+    expandedTerms.flatMap((terms) =>
+      mode === 'both'
+        ? [
+            fetchSerperResults(buildSerperQuery(terms, mode, THREE_D_SITES), serperKey),
+            fetchSerperResults(buildSerperQuery(terms, mode, TWO_D_SITES), serperKey),
+          ]
+        : [fetchSerperResults(buildSerperQuery(terms, mode, mode === '2d' ? TWO_D_SITES : THREE_D_SITES), serperKey)]
+    )
+  )
 
-  const filtered = organic
+  // Merge: base results first, then AI-expanded (preserves ranking priority)
+  const allOrganic = deduplicateOrganic([...baseOrganicBatches, ...expandedOrganicBatches])
+
+  const filtered = allOrganic
     .filter((r) => sites.some((s) => getDomain(r.link).endsWith(s)))
     .map((r) => ({ ...parseAssetUrl(r.link), r }))
     .filter(({ isSpecificPage }) => isSpecificPage)
@@ -322,5 +508,22 @@ export async function GET(req: NextRequest) {
     })
   )
 
-  return NextResponse.json({ results })
+  // Use first AI-expanded term for suggested site URLs (more technical),
+  // falling back to extracted keywords
+  const siteSearchTerm = expandedTerms[0] ?? keywords
+  const suggestedSites = buildSuggestedSites(siteSearchTerm, mode)
+
+  return NextResponse.json({
+    results,
+    suggestedSites,
+    _debug: {
+      keywords,
+      baseQueries,
+      expandedTerms,
+      openRouterError: openRouterError ?? null,
+      modelUsed: modelUsed ?? null,
+      totalRaw: allOrganic.length,
+      afterFilter: filtered.length,
+    },
+  })
 }

@@ -3,6 +3,12 @@ import React, { useState } from 'react'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
+export interface SuggestedSite {
+  name: string
+  url: string
+  description: string
+}
+
 export interface LiveResult {
   id: string
   name: string
@@ -17,6 +23,7 @@ export interface LiveResult {
 
 interface LiveSearchResultsProps {
   results: LiveResult[]
+  suggestedSites: SuggestedSite[]
   loading: boolean
   query: string
   error: string | null
@@ -42,7 +49,7 @@ function sourceBadgeColor(source: string) {
   return SOURCE_COLORS[source] ?? 'bg-zinc-600/90'
 }
 
-export function LiveSearchResults({ results, loading, query, error }: LiveSearchResultsProps) {
+export function LiveSearchResults({ results, suggestedSites, loading, query, error }: LiveSearchResultsProps) {
   const [downloading, setDownloading] = useState<string | null>(null)
 
   const handleDownload = async (result: LiveResult) => {
@@ -86,7 +93,7 @@ export function LiveSearchResults({ results, loading, query, error }: LiveSearch
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span className="text-zinc-400 text-sm">Searching the web for free textures & 2D assets...</span>
+          <span className="text-zinc-400 text-sm">Expanding your query with AI and searching the web...</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -134,6 +141,31 @@ export function LiveSearchResults({ results, loading, query, error }: LiveSearch
         </div>
         <span className="text-zinc-600 text-sm font-mono">{results.length} found across the web</span>
       </div>
+
+      {suggestedSites.length > 0 && (
+        <div className="mb-6 p-4 rounded-2xl border border-white/8 bg-white/[0.03]">
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+            Search directly on these sites
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {suggestedSites.map((site) => (
+              <a
+                key={site.url}
+                href={site.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={site.description}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/8 hover:border-white/15 text-zinc-400 hover:text-white text-xs font-medium transition-all"
+              >
+                <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                </svg>
+                {site.name}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {results.map((result) => (

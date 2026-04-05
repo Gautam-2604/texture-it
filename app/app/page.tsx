@@ -7,7 +7,7 @@ import { GenerateButton } from '@/components/GenerateButton'
 import { TextureGallery } from '@/components/TextureGallery'
 import { GeneratingLoader } from '@/components/GeneratingLoader'
 import { SearchResults } from '@/components/SearchResults'
-import { LiveSearchResults, LiveResult } from '@/components/LiveSearchResults'
+import { LiveSearchResults, LiveResult, SuggestedSite } from '@/components/LiveSearchResults'
 import { cn } from '@/lib/utils'
 
 interface Texture {
@@ -56,6 +56,7 @@ export default function AppPage() {
 
   // Live search state
   const [liveResults, setLiveResults] = useState<LiveResult[]>([])
+  const [liveSuggestedSites, setLiveSuggestedSites] = useState<SuggestedSite[]>([])
   const [liveLoading, setLiveLoading] = useState(false)
   const [liveError, setLiveError] = useState<string | null>(null)
   const [liveSearched, setLiveSearched] = useState(false)
@@ -159,8 +160,10 @@ export default function AppPage() {
       if (!res.ok) {
         setLiveError(data.error ?? 'Live search failed')
         setLiveResults([])
+        setLiveSuggestedSites([])
       } else {
         setLiveResults(data.results)
+        setLiveSuggestedSites(data.suggestedSites ?? [])
       }
     } catch {
       setLiveError('Something went wrong. Please try again.')
@@ -380,6 +383,7 @@ export default function AppPage() {
             {(liveSearched || liveLoading) && (
               <LiveSearchResults
                 results={liveResults}
+                suggestedSites={liveSuggestedSites}
                 loading={liveLoading}
                 query={searchQuery}
                 error={liveError}
