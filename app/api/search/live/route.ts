@@ -8,10 +8,11 @@ export interface LiveResult {
   downloadUrl: string | null
   pageUrl: string
   source: string
+  assetType: '2d' | '3d'
   canDownload: boolean
 }
 
-const TEXTURE_SITES = [
+const THREE_D_SITES = [
   'polyhaven.com',
   'ambientcg.com',
   '3dtextures.me',
@@ -22,6 +23,86 @@ const TEXTURE_SITES = [
   'texturecan.com',
 ]
 
+const TWO_D_SITES = [
+  'opengameart.org',
+  'kenney.nl',
+  'game-icons.net',
+  'craftpix.net',
+  'itch.io',
+]
+
+const ALL_SITES = [...THREE_D_SITES, ...TWO_D_SITES]
+
+const TWO_D_SIGNALS = [
+  'sprite', 'sprites', '2d', 'icon', 'icons', 'tile', 'tiles', 'tileset',
+  'spritesheet', 'cartoon', 'pixel art', 'pixelart', 'character sprite',
+  'game asset', 'game assets', 'ui asset', 'ui element', 'isometric',
+  'animation', 'sheet', 'illustration', 'clipart',
+]
+
+const THREE_D_SIGNALS = [
+  'texture', 'pbr', 'material', 'seamless', 'tileable', 'normal map',
+  'roughness', 'albedo', 'displacement', 'bump', 'specular', 'metalness',
+  'diffuse', 'ao map',
+]
+
+type AssetMode = '2d' | '3d' | 'both'
+
+function detectMode(q: string): AssetMode {
+  const lower = q.toLowerCase()
+  const is2d = TWO_D_SIGNALS.some((s) => lower.includes(s))
+  const is3d = THREE_D_SIGNALS.some((s) => lower.includes(s))
+  if (is2d && !is3d) return '2d'
+  if (is3d && !is2d) return '3d'
+  return 'both'
+}
+
+// Strip common natural-language filler so search engines see only the meaningful terms
+const FILLER_PATTERNS = [
+  /\b(i need|i want|i'm looking for|looking for|find me|give me|show me|please find|can you find|please give)\b/gi,
+  /\b(something (that looks like|like|similar to))\b/gi,
+  /\b(suitable for|perfect for|good for|used (in|for)|to use (in|for|as))\b/gi,
+  /\b(for (a|an|the|my|this|that|some))\b/gi,
+  /\b(in (a|an|the))\b/gi,
+  /\b(that (is|are|looks?|seems?))\b/gi,
+  /\b(kind of|sort of|type of)\b/gi,
+  /\b(please|thanks|thank you)\b/gi,
+]
+
+function cleanQuery(q: string): string {
+  let result = q
+  for (const pattern of FILLER_PATTERNS) {
+    result = result.replace(pattern, ' ')
+  }
+  return result.replace(/\s+/g, ' ').trim()
+}
+
+function buildSearchQuery(q: string): { serperQuery: string; sites: string[]; mode: AssetMode } {
+  const cleaned = cleanQuery(q)
+  const mode = detectMode(q)
+
+  let sites: string[]
+  let suffix: string
+
+  if (mode === '2d') {
+    sites = TWO_D_SITES
+    suffix = 'free 2D game asset'
+  } else if (mode === '3d') {
+    sites = THREE_D_SITES
+    suffix = 'free texture'
+  } else {
+    sites = ALL_SITES
+    suffix = 'free texture asset'
+  }
+
+  const siteFilter = sites.map((s) => `site:${s}`).join(' OR ')
+  return {
+    serperQuery: `${cleaned} ${suffix} (${siteFilter})`,
+    sites,
+    mode,
+  }
+}
+
 function getDomain(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '')
@@ -30,14 +111,16 @@ function getDomain(url: string): string {
   }
 }
 
+function siteAssetType(domain: string): '2d' | '3d' {
+  return TWO_D_SITES.some((s) => domain.endsWith(s)) ? '2d' : '3d'
+}
+
 interface ParsedAsset {
   downloadUrl: string | null
   thumbUrl: string | null
   isSpecificPage: boolean
 }
 
-// Per-site strict validation. Returns downloadUrl + thumbUrl where known,
-// isSpecificPage=false for homepages/category/search pages.
 function parseAssetUrl(url: string): ParsedAsset {
   const none: ParsedAsset = { downloadUrl: null, thumbUrl: null, isSpecificPage: false }
   try {
@@ -70,14 +153,14 @@ function parseAssetUrl(url: string): ParsedAsset {
     // ── 3DTextures ──────────────────────────────────────────────────────────────
     if (u.hostname.includes('3dtextures.me')) {
       const GENERIC = ['category', 'tag', 'page', 'author', 'search']
-      const isSpecific = segments.length >= 1 && !segments.some(s => GENERIC.includes(s))
+      const isSpecific = segments.length >= 1 && !segments.some((s) => GENERIC.includes(s))
       return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
     }
 
     // ── FreePBR ─────────────────────────────────────────────────────────────────
     if (u.hostname.includes('freepbr.com')) {
       const GENERIC = ['category', 'page', 'tag', 'search']
-      const isSpecific = segments.length >= 1 && !segments.some(s => GENERIC.includes(s))
+      const isSpecific = segments.length >= 1 && !segments.some((s) => GENERIC.includes(s))
       return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
     }
 
@@ -104,14 +187,43 @@ function parseAssetUrl(url: string): ParsedAsset {
       return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
     }
 
+    // ── OpenGameArt ─────────────────────────────────────────────────────────────
+    if (u.hostname.includes('opengameart.org')) {
+      const isSpecific = segments.length >= 2 && segments[0] === 'content'
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+    }
+
+    // ── Kenney ───────────────────────────────────────────────────────────────────
+    if (u.hostname.includes('kenney.nl')) {
+      const isSpecific = segments[0] === 'assets' && segments.length >= 2
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+    }
+
+    // ── Game-Icons ───────────────────────────────────────────────────────────────
+    if (u.hostname.includes('game-icons.net')) {
+      // e.g. https://game-icons.net/1x1/lorc/sword.html
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 3 }
+    }
+
+    // ── CraftPix ──────────────────────────────────────────────────────────────────
+    if (u.hostname.includes('craftpix.net')) {
+      const isSpecific = segments.length >= 2 && (segments[0] === 'product' || segments[0] === 'freebies')
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: isSpecific }
+    }
+
+    // ── itch.io ────────────────────────────────────────────────────────────────────
+    if (u.hostname.includes('itch.io')) {
+      if (u.hostname === 'itch.io') return none // browse/category pages
+      // author.itch.io/asset-slug
+      return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 1 }
+    }
+
     return { downloadUrl: null, thumbUrl: null, isSpecificPage: segments.length >= 2 }
   } catch {
     return none
   }
 }
 
-// Fetch only the <head> of a page and extract og:image.
-// Streams until </head> or 12 KB, then aborts — fast and cheap.
 async function fetchOgImage(url: string): Promise<string | null> {
   try {
     const controller = new AbortController()
@@ -120,7 +232,7 @@ async function fetchOgImage(url: string): Promise<string | null> {
     const res = await fetch(url, {
       signal: controller.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Textura/1.0)', Accept: 'text/html' },
-      next: { revalidate: 86400 }, // cache OG image per URL for 24h
+      next: { revalidate: 86400 },
     })
     clearTimeout(timer)
     if (!res.ok) return null
@@ -141,7 +253,6 @@ async function fetchOgImage(url: string): Promise<string | null> {
       reader.cancel().catch(() => {})
     }
 
-    // og:image appears in either attribute order
     const m =
       html.match(/property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ??
       html.match(/content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
@@ -153,7 +264,10 @@ async function fetchOgImage(url: string): Promise<string | null> {
 
 function cleanTitle(title: string): string {
   return title
-    .replace(/\s*[-–|]\s*(Poly Haven|AmbientCG|3DTextures|FreePBR|CGBookcase|ShareTextures|Free PBR|Texture Can).*/i, '')
+    .replace(
+      /\s*[-–|]\s*(Poly Haven|AmbientCG|3DTextures|FreePBR|CGBookcase|ShareTextures|Free PBR|Texture Can|OpenGameArt|Kenney|Game Icons|CraftPix|itch\.io).*/i,
+      ''
+    )
     .replace(/\s*\|\s*.*$/, '')
     .trim()
 }
@@ -167,13 +281,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'SERPER_API_KEY not configured' }, { status: 503 })
   }
 
-  const siteFilter = TEXTURE_SITES.map((s) => `site:${s}`).join(' OR ')
-  const searchQuery = `${query} seamless PBR texture free (${siteFilter})`
+  const { serperQuery, sites } = buildSearchQuery(query)
 
   const res = await fetch('https://google.serper.dev/search', {
     method: 'POST',
     headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ q: searchQuery, num: 20 }),
+    body: JSON.stringify({ q: serperQuery, num: 20 }),
     next: { revalidate: 300 },
   })
 
@@ -186,13 +299,13 @@ export async function GET(req: NextRequest) {
     data.organic ?? []
 
   const filtered = organic
-    .filter((r) => TEXTURE_SITES.some((s) => getDomain(r.link).endsWith(s)))
+    .filter((r) => sites.some((s) => getDomain(r.link).endsWith(s)))
     .map((r) => ({ ...parseAssetUrl(r.link), r }))
     .filter(({ isSpecificPage }) => isSpecificPage)
 
-  // Resolve thumbnails: known CDN pattern → Serper imageUrl → OG scrape (parallel, 3s timeout)
   const results: LiveResult[] = await Promise.all(
     filtered.map(async ({ downloadUrl, thumbUrl, r }) => {
+      const domain = getDomain(r.link)
       const knownThumb = thumbUrl ?? r.imageUrl ?? null
       const resolvedThumb = knownThumb ?? await fetchOgImage(r.link)
       return {
@@ -202,7 +315,8 @@ export async function GET(req: NextRequest) {
         thumb: resolvedThumb,
         downloadUrl,
         pageUrl: r.link,
-        source: getDomain(r.link),
+        source: domain,
+        assetType: siteAssetType(domain),
         canDownload: !!downloadUrl,
       }
     })

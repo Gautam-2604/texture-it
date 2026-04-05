@@ -11,6 +11,7 @@ export interface LiveResult {
   downloadUrl: string | null
   pageUrl: string
   source: string
+  assetType: '2d' | '3d'
   canDownload: boolean
 }
 
@@ -22,12 +23,19 @@ interface LiveSearchResultsProps {
 }
 
 const SOURCE_COLORS: Record<string, string> = {
+  // 3D / texture sources
   'polyhaven.com': 'bg-orange-500/90',
   'ambientcg.com': 'bg-sky-500/90',
   '3dtextures.me': 'bg-emerald-500/90',
   'freepbr.com': 'bg-violet-500/90',
   'cgbookcase.com': 'bg-rose-500/90',
   'sharetextures.com': 'bg-amber-500/90',
+  // 2D / game-art sources
+  'opengameart.org': 'bg-lime-600/90',
+  'kenney.nl': 'bg-cyan-600/90',
+  'game-icons.net': 'bg-fuchsia-600/90',
+  'craftpix.net': 'bg-teal-600/90',
+  'itch.io': 'bg-red-600/90',
 }
 
 function sourceBadgeColor(source: string) {
@@ -78,7 +86,7 @@ export function LiveSearchResults({ results, loading, query, error }: LiveSearch
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span className="text-zinc-400 text-sm">Searching the web for free textures...</span>
+          <span className="text-zinc-400 text-sm">Searching the web for free textures & 2D assets...</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -110,7 +118,7 @@ export function LiveSearchResults({ results, loading, query, error }: LiveSearch
     return (
       <div className="mt-6 text-center py-10">
         <p className="text-zinc-500 text-sm">No live results found for &ldquo;{query}&rdquo;</p>
-        <p className="text-zinc-600 text-xs mt-1">Try shorter terms like &ldquo;wood&rdquo; or &ldquo;concrete&rdquo;</p>
+        <p className="text-zinc-600 text-xs mt-1">Try terms like &ldquo;wood texture&rdquo;, &ldquo;stone&rdquo;, &ldquo;grass sprite&rdquo;, or &ldquo;character icon&rdquo;</p>
       </div>
     )
   }
@@ -152,9 +160,15 @@ export function LiveSearchResults({ results, loading, query, error }: LiveSearch
                 </div>
               )}
               {/* Source badge */}
-              <div className="absolute top-2 right-2">
+              <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
                 <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full text-white', sourceBadgeColor(result.source))}>
                   {result.source}
+                </span>
+                <span className={cn(
+                  'text-[10px] font-bold px-2 py-0.5 rounded-full text-white',
+                  result.assetType === '2d' ? 'bg-lime-700/90' : 'bg-indigo-700/90'
+                )}>
+                  {result.assetType === '2d' ? '2D' : '3D'}
                 </span>
               </div>
               {/* Download indicator */}
