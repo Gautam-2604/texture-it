@@ -1,5 +1,6 @@
 import React from 'react'
 import Link from 'next/link'
+import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
 import { BackgroundBeams } from '@/components/ui/background-beams'
 import { Spotlight } from '@/components/ui/spotlight'
 import { AnimatedGradientText } from '@/components/ui/animated-gradient-text'
@@ -35,15 +36,23 @@ export default function LandingPage() {
           <Link href="/pricing" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
             Pricing
           </Link>
-          <Link href="/sign-in" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
-            Sign in
-          </Link>
-          <Link
-            href="/sign-up"
-            className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-          >
-            Get started free
-          </Link>
+          <SignedOut>
+            <Link href="/sign-in" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
+              Sign in
+            </Link>
+            <Link
+              href="/sign-up"
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+            >
+              Get started free
+            </Link>
+          </SignedOut>
+          <SignedIn>
+            <Link href="/app" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
+              Dashboard
+            </Link>
+            <UserButton />
+          </SignedIn>
         </div>
       </nav>
 
@@ -73,20 +82,24 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/sign-up"
-              className="px-8 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
-            >
-              Start generating — it&apos;s free
-            </Link>
-            <Link
-              href="/pricing"
-              className="px-8 py-4 rounded-xl font-semibold text-zinc-300 border border-white/10 hover:border-white/30 hover:text-white transition-all duration-200"
-            >
-              View pricing
-            </Link>
+            <SignedOut>
+              <Link
+                href="/sign-up"
+                className="px-8 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
+              >
+                Start generating — it&apos;s free
+              </Link>
+            </SignedOut>
+            <SignedIn>
+              <Link
+                href="/app"
+                className="px-8 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
+              >
+                Go to dashboard
+              </Link>
+            </SignedIn>
           </div>
-          <p className="text-zinc-600 text-sm mt-6">5 free textures · No credit card required</p>
+          <p className="text-zinc-600 text-sm mt-6">Free for use (for now) · No credit card required</p>
         </div>
       </section>
 
@@ -151,14 +164,24 @@ export default function LandingPage() {
             <div className="bg-[#0a0a0a] rounded-3xl p-12">
               <h2 className="text-4xl font-black text-white mb-4">Ready to create?</h2>
               <p className="text-zinc-400 mb-8 leading-relaxed">
-                Start with 5 free textures. Upgrade to Pro for unlimited generation at just $3/month.
+                Free for use (for now). Sign up and start generating textures instantly.
               </p>
-              <Link
-                href="/sign-up"
-                className="inline-block px-10 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
-              >
-                Get started free
-              </Link>
+              <SignedOut>
+                <Link
+                  href="/sign-up"
+                  className="inline-block px-10 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
+                >
+                  Get started free
+                </Link>
+              </SignedOut>
+              <SignedIn>
+                <Link
+                  href="/app"
+                  className="inline-block px-10 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
+                >
+                  Go to dashboard
+                </Link>
+              </SignedIn>
             </div>
           </div>
         </div>
