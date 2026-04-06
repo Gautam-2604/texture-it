@@ -1,6 +1,6 @@
 import React from 'react'
 import Link from 'next/link'
-import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
+import { Show, UserButton } from '@clerk/nextjs'
 import { BackgroundBeams } from '@/components/ui/background-beams'
 import { Spotlight } from '@/components/ui/spotlight'
 import { AnimatedGradientText } from '@/components/ui/animated-gradient-text'
@@ -36,7 +36,7 @@ export default function LandingPage() {
           <Link href="/pricing" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
             Pricing
           </Link>
-          <SignedOut>
+          <Show when="signed-out">
             <Link href="/sign-in" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
               Sign in
             </Link>
@@ -46,13 +46,13 @@ export default function LandingPage() {
             >
               Get started free
             </Link>
-          </SignedOut>
-          <SignedIn>
+          </Show>
+          <Show when="signed-in">
             <Link href="/app" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
               Dashboard
             </Link>
             <UserButton />
-          </SignedIn>
+          </Show>
         </div>
       </nav>
 
@@ -82,22 +82,22 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <SignedOut>
+            <Show when="signed-out">
               <Link
                 href="/sign-up"
                 className="px-8 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
               >
                 Start generating — it&apos;s free
               </Link>
-            </SignedOut>
-            <SignedIn>
+            </Show>
+            <Show when="signed-in">
               <Link
                 href="/app"
                 className="px-8 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
               >
                 Go to dashboard
               </Link>
-            </SignedIn>
+            </Show>
           </div>
           <p className="text-zinc-600 text-sm mt-6">Free for use (for now) · No credit card required</p>
         </div>
@@ -166,22 +166,22 @@ export default function LandingPage() {
               <p className="text-zinc-400 mb-8 leading-relaxed">
                 Free for use (for now). Sign up and start generating textures instantly.
               </p>
-              <SignedOut>
+              <Show when="signed-out">
                 <Link
                   href="/sign-up"
                   className="inline-block px-10 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
                 >
                   Get started free
                 </Link>
-              </SignedOut>
-              <SignedIn>
+              </Show>
+              <Show when="signed-in">
                 <Link
                   href="/app"
                   className="inline-block px-10 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
                 >
                   Go to dashboard
                 </Link>
-              </SignedIn>
+              </Show>
             </div>
           </div>
         </div>
