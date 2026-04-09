@@ -245,6 +245,13 @@ export default function AppPage() {
                   </kbd>{' '}
                   to generate
                 </p>
+                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-950/40 border border-amber-500/20 text-amber-400/80 text-xs">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
+                  </span>
+                  Scouting for a better AI model — upgrades incoming
+                </div>
               </div>
 
               <div className="space-y-4">
