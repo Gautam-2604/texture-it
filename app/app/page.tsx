@@ -1,6 +1,7 @@
 'use client'
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import { PromptInput } from '@/components/PromptInput'
 import { GenerateButton } from '@/components/GenerateButton'
@@ -22,10 +23,11 @@ interface SearchResult {
   name: string
   categories: string[]
   thumb: string
-  downloadUrl: string
+  downloadUrl: string | null
   pageUrl: string
-  source: 'polyhaven' | 'ambientcg'
+  source: 'polyhaven' | 'ambientcg' | 'opengameart' | 'kenney'
   sourceLabel: string
+  assetDimension: '2d' | '3d'
 }
 
 async function fireConfetti() {
@@ -38,8 +40,9 @@ async function fireConfetti() {
   })
 }
 
-export default function AppPage() {
-  const [mode, setMode] = useState<'ai' | 'search'>('ai')
+function AppPageContent() {
+  const searchParams = useSearchParams()
+  const [mode, setMode] = useState<'ai' | 'search'>('search')
 
   // AI mode state
   const [prompt, setPrompt] = useState('')
@@ -74,6 +77,21 @@ export default function AppPage() {
   useEffect(() => {
     fetchTextures()
   }, [fetchTextures])
+
+  // Handle URL params from landing page search bar and pre-populate search on mount
+  useEffect(() => {
+    const q = searchParams.get('q')
+    const m = searchParams.get('mode')
+    if (m === 'ai') {
+      setMode('ai')
+    } else if (q) {
+      setSearchQuery(q)
+      runSearch(q)
+    } else {
+      // Pre-populate with popular results
+      runSearch('')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return
@@ -202,20 +220,6 @@ export default function AppPage() {
         <div className="flex justify-center mb-10">
           <div className="flex items-center p-1 rounded-xl bg-white/5 border border-white/10">
             <button
-              onClick={() => handleModeSwitch('ai')}
-              className={cn(
-                'flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
-                mode === 'ai'
-                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              )}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-              </svg>
-              AI Generate
-            </button>
-            <button
               onClick={() => handleModeSwitch('search')}
               className={cn(
                 'flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
@@ -228,6 +232,20 @@ export default function AppPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
               </svg>
               Search Assets
+            </button>
+            <button
+              onClick={() => handleModeSwitch('ai')}
+              className={cn(
+                'flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
+                mode === 'ai'
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              )}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+              </svg>
+              AI Generate
             </button>
           </div>
         </div>
@@ -322,11 +340,15 @@ export default function AppPage() {
                 <p className="text-zinc-500">
                   Browse{' '}
                   <a href="https://polyhaven.com" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 transition-colors">Poly Haven</a>
-                  {' '}+{' '}
+                  {' + '}
                   <a href="https://ambientcg.com" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:text-sky-300 transition-colors">AmbientCG</a>
+                  {' + '}
+                  <a href="https://opengameart.org" target="_blank" rel="noopener noreferrer" className="text-lime-400 hover:text-lime-300 transition-colors">OpenGameArt</a>
+                  {' + '}
+                  <a href="https://kenney.nl" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 transition-colors">Kenney</a>
                   {', or use '}
                   <span className="text-white font-medium">Live Web Search</span>
-                  {' for 3D textures & 2D sprites across the web'}
+                  {' for more textures & 2D sprites across the web'}
                 </p>
               </div>
 
@@ -400,5 +422,13 @@ export default function AppPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function AppPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#080808]" />}>
+      <AppPageContent />
+    </Suspense>
   )
 }

@@ -29,6 +29,20 @@ interface LiveSearchResultsProps {
   error: string | null
 }
 
+const FREE_SOURCES = new Set([
+  'opengameart.org', 'kenney.nl', 'game-icons.net',
+  'polyhaven.com', 'ambientcg.com', '3dtextures.me',
+  'freepbr.com', 'cgbookcase.com', 'sharetextures.com',
+  'publicdomaintextures.net', 'texturecan.com',
+])
+// These sites have a mix of free previews and paid full assets
+const MIXED_SOURCES = new Set(['craftpix.net', 'itch.io'])
+
+function pricingBadge(source: string): { label: string; className: string } {
+  if (MIXED_SOURCES.has(source)) return { label: 'Paid/Free', className: 'bg-amber-600/90 text-white' }
+  return { label: 'Free', className: 'bg-emerald-700/90 text-white' }
+}
+
 const SOURCE_COLORS: Record<string, string> = {
   // 3D / texture sources
   'polyhaven.com': 'bg-orange-500/90',
@@ -37,10 +51,9 @@ const SOURCE_COLORS: Record<string, string> = {
   'freepbr.com': 'bg-violet-500/90',
   'cgbookcase.com': 'bg-rose-500/90',
   'sharetextures.com': 'bg-amber-500/90',
-  // 2D / game-art sources
+  // 2D / texture sources
   'opengameart.org': 'bg-lime-600/90',
   'kenney.nl': 'bg-cyan-600/90',
-  'game-icons.net': 'bg-fuchsia-600/90',
   'craftpix.net': 'bg-teal-600/90',
   'itch.io': 'bg-red-600/90',
 }
@@ -211,6 +224,12 @@ export function LiveSearchResults({ results, suggestedSites, loading, query, err
                   </span>
                 </div>
               )}
+              {/* Pricing badge — bottom-left */}
+              <div className="absolute bottom-2 left-2">
+                <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', pricingBadge(result.source).className)}>
+                  {pricingBadge(result.source).label}
+                </span>
+              </div>
             </div>
 
             {/* Info */}

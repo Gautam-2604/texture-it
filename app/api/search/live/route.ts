@@ -32,7 +32,6 @@ const THREE_D_SITES = [
 const TWO_D_SITES = [
   'opengameart.org',
   'kenney.nl',
-  'game-icons.net',
   'craftpix.net',
   'itch.io',
 ]
@@ -40,10 +39,10 @@ const TWO_D_SITES = [
 const ALL_SITES = [...THREE_D_SITES, ...TWO_D_SITES]
 
 const TWO_D_SIGNALS = [
-  'sprite', 'sprites', '2d', 'icon', 'icons', 'tile', 'tiles', 'tileset',
-  'spritesheet', 'cartoon', 'pixel art', 'pixelart', 'character sprite',
-  'game asset', 'game assets', 'ui asset', 'ui element', 'isometric',
-  'animation', 'sheet', 'illustration', 'clipart',
+  '2d', 'illustration', 'hand-drawn', 'hand drawn', 'hand painted',
+  'watercolor', 'watercolour', 'painted', 'drawn', 'flat texture',
+  'illustrated', 'cartoon texture', 'stylized texture', 'stylised texture',
+  'digital painting', 'concept texture',
 ]
 
 const THREE_D_SIGNALS = [
@@ -104,10 +103,14 @@ function extractKeywords(q: string): string {
   return keywords.slice(0, 3).join(' ')
 }
 
-function buildSerperQuery(terms: string, mode: AssetMode, sites: string[]): string {
+// Multiple 2D suffix variants — texture-focused, not game sprite focused
+const TWO_D_SUFFIX_A = 'free seamless 2D texture pattern'
+const TWO_D_SUFFIX_B = 'free hand-drawn texture surface tileable'
+
+function buildSerperQuery(terms: string, mode: AssetMode, sites: string[], suffix2dVariant: 'a' | 'b' = 'a'): string {
   let suffix: string
   if (mode === '2d') {
-    suffix = 'free 2D game asset sprite'
+    suffix = suffix2dVariant === 'a' ? TWO_D_SUFFIX_A : TWO_D_SUFFIX_B
   } else if (mode === '3d') {
     suffix = 'free texture OR material PBR'
   } else {
@@ -147,10 +150,10 @@ async function expandQuery(
 
   const modeHint =
     mode === '2d'
-      ? '2D game assets, sprites, tilesets, and icons'
+      ? 'illustrated, hand-drawn, or flat 2D textures and surface patterns'
       : mode === '3d'
       ? 'PBR textures, seamless materials, and normal maps'
-      : 'game assets, PBR textures, sprites, or materials'
+      : 'seamless textures, PBR materials, or illustrated surface patterns'
 
   const prompt = `You are a search query optimizer for finding free ${modeHint} on sites like Poly Haven, AmbientCG, OpenGameArt, and Kenney.
 
@@ -240,10 +243,10 @@ function buildSuggestedSites(keywords: string, mode: AssetMode): SuggestedSite[]
 
   if (mode !== '3d') {
     sites.push(
-      { name: 'OpenGameArt', url: `https://opengameart.org/art-search?keys=${q}`, description: 'Free 2D/3D game art' },
-      { name: 'Kenney', url: `https://kenney.nl/assets?q=${q}`, description: 'Free game asset packs' },
-      { name: 'itch.io Assets', url: `https://itch.io/game-assets/free?search=${q}`, description: 'Free indie game assets' },
-      { name: 'Game Icons', url: `https://game-icons.net/`, description: 'Free SVG game icons' },
+      { name: 'OpenGameArt', url: `https://opengameart.org/art-search-advanced?keys=${q}&field_art_type%5B%5D=3`, description: 'Free 2D textures & patterns (OGA textures)' },
+      { name: 'Kenney', url: `https://kenney.nl/assets?q=${q}`, description: 'Free CC0 texture & asset packs' },
+      { name: 'itch.io Assets', url: `https://itch.io/game-assets/free/tag-textures?search=${q}`, description: 'Free texture packs on itch.io' },
+      { name: 'CraftPix', url: `https://craftpix.net/search/?q=${q}`, description: 'Free & paid texture packs' },
     )
   }
 
@@ -416,7 +419,7 @@ async function fetchOgImage(url: string): Promise<string | null> {
 function cleanTitle(title: string): string {
   return title
     .replace(
-      /\s*[-–|]\s*(Poly Haven|AmbientCG|3DTextures|FreePBR|CGBookcase|ShareTextures|Free PBR|Texture Can|OpenGameArt|Kenney|Game Icons|CraftPix|itch\.io).*/i,
+      /\s*[-–|]\s*(Poly Haven|AmbientCG|3DTextures|FreePBR|CGBookcase|ShareTextures|Free PBR|Texture Can|OpenGameArt|Kenney|CraftPix|itch\.io).*/i,
       ''
     )
     .replace(/\s*\|\s*.*$/, '')
@@ -452,15 +455,22 @@ export async function GET(req: NextRequest) {
   const { sites, mode, keywords } = buildSearchQuery(query)
 
   // Build base Serper queries. For 'both' mode, split 3D and 2D sites into two
-  // separate queries — a single query with 13 site: operators is too complex for
-  // Google and consistently returns 0 results.
+  // separate queries — a single query with 13+ site: operators is too complex for
+  // Google. Also run a second dedicated 2D query with an alternate suffix so 2D
+  // coverage isn't crowded out by 3D results.
   const baseQueries =
     mode === 'both'
       ? [
           buildSerperQuery(keywords, mode, THREE_D_SITES),
-          buildSerperQuery(keywords, mode, TWO_D_SITES),
+          buildSerperQuery(keywords, '2d', TWO_D_SITES, 'a'),
+          buildSerperQuery(keywords, '2d', TWO_D_SITES, 'b'),
         ]
-      : [buildSerperQuery(keywords, mode, mode === '2d' ? TWO_D_SITES : THREE_D_SITES)]
+      : mode === '2d'
+      ? [
+          buildSerperQuery(keywords, '2d', TWO_D_SITES, 'a'),
+          buildSerperQuery(keywords, '2d', TWO_D_SITES, 'b'),
+        ]
+      : [buildSerperQuery(keywords, mode, THREE_D_SITES)]
 
   // Run base Serper queries and AI expansion in parallel
   const [baseOrganicBatches, { terms: expandedTerms, error: openRouterError, modelUsed }] =
@@ -475,9 +485,15 @@ export async function GET(req: NextRequest) {
       mode === 'both'
         ? [
             fetchSerperResults(buildSerperQuery(terms, mode, THREE_D_SITES), serperKey),
-            fetchSerperResults(buildSerperQuery(terms, mode, TWO_D_SITES), serperKey),
+            fetchSerperResults(buildSerperQuery(terms, '2d', TWO_D_SITES, 'a'), serperKey),
+            fetchSerperResults(buildSerperQuery(terms, '2d', TWO_D_SITES, 'b'), serperKey),
           ]
-        : [fetchSerperResults(buildSerperQuery(terms, mode, mode === '2d' ? TWO_D_SITES : THREE_D_SITES), serperKey)]
+        : mode === '2d'
+        ? [
+            fetchSerperResults(buildSerperQuery(terms, '2d', TWO_D_SITES, 'a'), serperKey),
+            fetchSerperResults(buildSerperQuery(terms, '2d', TWO_D_SITES, 'b'), serperKey),
+          ]
+        : [fetchSerperResults(buildSerperQuery(terms, mode, THREE_D_SITES), serperKey)]
     )
   )
 
