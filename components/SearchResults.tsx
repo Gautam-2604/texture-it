@@ -10,7 +10,7 @@ interface SearchResult {
   thumb: string
   downloadUrl: string | null
   pageUrl: string
-  source: 'polyhaven' | 'ambientcg' | 'opengameart' | 'kenney'
+  source: 'polyhaven' | 'ambientcg' | '3dtextures' | 'freepbr' | 'subtlepatterns' | 'transparenttextures' | 'lostandtaken'
   sourceLabel: string
   assetDimension: '2d' | '3d'
 }
@@ -24,15 +24,21 @@ interface SearchResultsProps {
 const SOURCE_BADGE_COLORS: Record<string, string> = {
   polyhaven: 'bg-orange-500/90',
   ambientcg: 'bg-sky-500/90',
-  opengameart: 'bg-lime-600/90',
-  kenney: 'bg-cyan-600/90',
+  '3dtextures': 'bg-violet-600/90',
+  freepbr: 'bg-teal-600/90',
+  subtlepatterns: 'bg-pink-600/90',
+  transparenttextures: 'bg-amber-600/90',
+  lostandtaken: 'bg-stone-600/90',
 }
 
 const FREE_BADGE: Record<string, { label: string; className: string }> = {
   polyhaven: { label: 'CC0', className: 'bg-emerald-600/90 text-white' },
   ambientcg: { label: 'CC0', className: 'bg-emerald-600/90 text-white' },
-  opengameart: { label: 'Free', className: 'bg-green-600/90 text-white' },
-  kenney: { label: 'CC0', className: 'bg-emerald-600/90 text-white' },
+  '3dtextures': { label: 'Free', className: 'bg-green-600/90 text-white' },
+  freepbr: { label: 'Free', className: 'bg-green-600/90 text-white' },
+  subtlepatterns: { label: 'CC0', className: 'bg-emerald-600/90 text-white' },
+  transparenttextures: { label: 'Free', className: 'bg-green-600/90 text-white' },
+  lostandtaken: { label: 'Free', className: 'bg-green-600/90 text-white' },
 }
 
 type AssetFilter = 'all' | '3d' | '2d'
@@ -110,7 +116,7 @@ export function SearchResults({ results, loading, query }: SearchResultsProps) {
   if (results.length === 0) {
     return (
       <div className="text-center py-16">
-        <p className="text-zinc-600 text-sm">Search for free assets from Poly Haven, AmbientCG, OpenGameArt, and Kenney</p>
+        <p className="text-zinc-600 text-sm">Search free textures from Poly Haven, AmbientCG, 3DTextures, FreePBR, Subtle Patterns, Transparent Textures, and Lost and Taken</p>
       </div>
     )
   }
@@ -121,7 +127,7 @@ export function SearchResults({ results, loading, query }: SearchResultsProps) {
         <h2 className="text-xl font-bold text-white">
           {query ? `Results for "${query}"` : 'Popular assets'}
         </h2>
-        <span className="text-zinc-600 text-sm font-mono">{results.length} found · Poly Haven · AmbientCG · OpenGameArt · Kenney</span>
+        <span className="text-zinc-600 text-sm font-mono">{results.length} found · Poly Haven · AmbientCG · 3DTextures · FreePBR · Subtle Patterns · Transparent Textures · Lost and Taken</span>
       </div>
 
       {/* Filter pills */}
@@ -209,7 +215,7 @@ export function SearchResults({ results, loading, query }: SearchResultsProps) {
                 >
                   View
                 </a>
-                {result.source === 'opengameart' || result.source === 'kenney' ? (
+                {!result.downloadUrl || result.source === '3dtextures' || result.source === 'freepbr' ? (
                   <a
                     href={result.pageUrl}
                     target="_blank"

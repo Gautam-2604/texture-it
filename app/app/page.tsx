@@ -25,7 +25,7 @@ interface SearchResult {
   thumb: string
   downloadUrl: string | null
   pageUrl: string
-  source: 'polyhaven' | 'ambientcg' | 'opengameart' | 'kenney'
+  source: 'polyhaven' | 'ambientcg' | '3dtextures' | 'freepbr' | 'subtlepatterns' | 'transparenttextures' | 'lostandtaken'
   sourceLabel: string
   assetDimension: '2d' | '3d'
 }
