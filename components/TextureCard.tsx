@@ -21,13 +21,8 @@ export function TextureCard({ id, prompt, url, createdAt, isNew }: TextureCardPr
     setDownloading(true)
     setDownloadError(false)
     try {
-      const res = await fetch(`/api/download?id=${id}`)
+      const res = await fetch(url)
       if (!res.ok) throw new Error('Download failed')
-
-      // Guard: make sure we got an image, not an error JSON
-      const contentType = res.headers.get('content-type') ?? ''
-      if (!contentType.startsWith('image/')) throw new Error('Invalid response')
-
       const blob = await res.blob()
       const objUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -36,7 +31,6 @@ export function TextureCard({ id, prompt, url, createdAt, isNew }: TextureCardPr
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      // Delay revoke so the browser has time to start the download
       setTimeout(() => URL.revokeObjectURL(objUrl), 5000)
     } catch {
       setDownloadError(true)

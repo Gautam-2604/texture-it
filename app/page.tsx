@@ -1,6 +1,5 @@
 import React from 'react'
 import Link from 'next/link'
-import { Show, UserButton } from '@clerk/nextjs'
 import { BackgroundBeams } from '@/components/ui/background-beams'
 import { Spotlight } from '@/components/ui/spotlight'
 import { AnimatedGradientText } from '@/components/ui/animated-gradient-text'
@@ -33,28 +32,12 @@ export default function LandingPage() {
           </div>
           <span className="text-white font-bold text-xl tracking-tight">Textura</span>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/pricing" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
-            Pricing
-          </Link>
-          <Show when="signed-out">
-            <Link href="/sign-in" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
-              Sign in
-            </Link>
-            <Link
-              href="/sign-up"
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-            >
-              Get started free
-            </Link>
-          </Show>
-          <Show when="signed-in">
-            <Link href="/app" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
-              Dashboard
-            </Link>
-            <UserButton />
-          </Show>
-        </div>
+        <Link
+          href="/app"
+          className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+        >
+          Open app
+        </Link>
       </nav>
 
       {/* Hero */}
@@ -78,12 +61,12 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-zinc-400 text-xl max-w-2xl mx-auto mb-12 leading-relaxed">
-            Search thousands of free CC0 textures from Poly Haven, AmbientCG, OpenGameArt, and Kenney —
+            Search thousands of free CC0 textures from Poly Haven, AmbientCG, Subtle Patterns, and more —
             or describe any surface and generate it with AI in seconds.
           </p>
 
           <HeroSearchBar />
-          <p className="text-zinc-600 text-sm mt-6">Free for use · No credit card required</p>
+          <p className="text-zinc-600 text-sm mt-6">Free · No account required</p>
         </div>
       </section>
 
@@ -148,24 +131,14 @@ export default function LandingPage() {
             <div className="bg-[#0a0a0a] rounded-3xl p-12">
               <h2 className="text-4xl font-black text-white mb-4">Ready to find your texture?</h2>
               <p className="text-zinc-400 mb-8 leading-relaxed">
-                Search thousands of free CC0 assets or generate custom textures with AI — all free, no credit card required.
+                Search thousands of free CC0 assets or generate custom textures with AI — no account, no credit card.
               </p>
-              <Show when="signed-out">
-                <Link
-                  href="/sign-up"
-                  className="inline-block px-10 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
-                >
-                  Get started free
-                </Link>
-              </Show>
-              <Show when="signed-in">
-                <Link
-                  href="/app"
-                  className="inline-block px-10 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
-                >
-                  Go to dashboard
-                </Link>
-              </Show>
+              <Link
+                href="/app"
+                className="inline-block px-10 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] transition-all duration-300 hover:scale-105"
+              >
+                Get started free
+              </Link>
             </div>
           </div>
         </div>
@@ -173,16 +146,13 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/5 px-6 py-8">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex items-center justify-center">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
               <span className="text-white font-bold text-xs">T</span>
             </div>
             <span className="text-zinc-600 text-sm">Textura</span>
           </div>
-          <Link href="/pricing" className="text-zinc-600 hover:text-zinc-400 text-sm transition-colors">
-            Pricing
-          </Link>
         </div>
       </footer>
     </div>

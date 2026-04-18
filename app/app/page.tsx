@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { UserButton } from '@clerk/nextjs'
 import { PromptInput } from '@/components/PromptInput'
 import { GenerateButton } from '@/components/GenerateButton'
 import { TextureGallery } from '@/components/TextureGallery'
@@ -63,20 +62,6 @@ function AppPageContent() {
   const [liveLoading, setLiveLoading] = useState(false)
   const [liveError, setLiveError] = useState<string | null>(null)
   const [liveSearched, setLiveSearched] = useState(false)
-
-  const fetchTextures = useCallback(async () => {
-    try {
-      const res = await fetch('/api/textures')
-      if (res.ok) {
-        const data = await res.json()
-        setTextures(data.textures)
-      }
-    } catch {}
-  }, [])
-
-  useEffect(() => {
-    fetchTextures()
-  }, [fetchTextures])
 
   // Handle URL params from landing page search bar and pre-populate search on mount
   useEffect(() => {
@@ -211,7 +196,6 @@ function AppPageContent() {
           </div>
           <span className="text-white font-bold tracking-tight">Textura</span>
         </Link>
-        <UserButton />
       </nav>
 
       {/* Main */}

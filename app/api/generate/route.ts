@@ -1,21 +1,21 @@
-import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { generateSchema } from '@/lib/schemas'
 import { getGenerateRatelimit } from '@/lib/ratelimit'
 import { enhancePrompt, generateTexture } from '@/lib/openrouter'
-import { getOrCreateUser, saveTexture, incrementTextureCount, uploadTextureToStorage } from '@/lib/supabase'
+import { uploadTextureToStorage } from '@/lib/supabase'
+import { headers } from 'next/headers'
+import { randomUUID } from 'crypto'
 
 export async function POST(req: Request) {
   try {
-    // 1. Auth check
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // 2. Rate limit
+    // Rate limit by IP
     const ratelimit = getGenerateRatelimit()
-    const { success: rateLimitOk, limit, remaining } = await ratelimit.limit(userId)
+    const headersList = await headers()
+    const ip =
+      headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+      headersList.get('x-real-ip') ??
+      'anonymous'
+    const { success: rateLimitOk, limit, remaining } = await ratelimit.limit(ip)
     if (!rateLimitOk) {
       return NextResponse.json(
         { error: 'Too many requests. Please wait a moment.' },
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       )
     }
 
-    // 3. Parse + validate body
+    // Parse + validate body
     let body: unknown
     try {
       body = await req.json()
@@ -47,15 +47,10 @@ export async function POST(req: Request) {
 
     const { prompt } = parsed.data
 
-    // 4. Ensure user record exists (no usage gate — everyone generates freely)
-    const clerkUser = await currentUser()
-    const email = clerkUser?.emailAddresses?.[0]?.emailAddress ?? ''
-    await getOrCreateUser(userId, email)
-
-    // 5. Enhance prompt
+    // Enhance prompt
     const enhancedPrompt = enhancePrompt(prompt)
 
-    // 6. Generate image via OpenRouter
+    // Generate image via OpenRouter
     let imageBuffer: ArrayBuffer
     try {
       imageBuffer = await generateTexture(enhancedPrompt)
@@ -64,29 +59,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Image generation failed: ${msg}` }, { status: 502 })
     }
 
-    // 7. Upload to Supabase Storage
+    // Upload to Supabase Storage under anonymous path
     let storageUrl: string
     try {
-      storageUrl = await uploadTextureToStorage(userId, imageBuffer)
+      storageUrl = await uploadTextureToStorage('anonymous', imageBuffer)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Storage upload failed'
       return NextResponse.json({ error: msg }, { status: 502 })
     }
 
-    // 8. Save record + track usage count (for analytics, not gating)
-    const texture = await saveTexture({
-      user_id: userId,
-      prompt,
-      enhanced_prompt: enhancedPrompt,
-      blob_url: storageUrl,
-    })
-    await incrementTextureCount(userId)
-
     return NextResponse.json({
-      id: texture.id,
+      id: randomUUID(),
       url: storageUrl,
       prompt,
-      createdAt: texture.created_at,
+      createdAt: new Date().toISOString(),
     })
   } catch (err) {
     if (process.env.NODE_ENV !== 'production') {
