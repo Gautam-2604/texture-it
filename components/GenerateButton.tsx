@@ -8,6 +8,7 @@ interface GenerateButtonProps {
   disabled?: boolean
 }
 
+
 export function GenerateButton({ onClick, loading, disabled }: GenerateButtonProps) {
   return (
     <button
